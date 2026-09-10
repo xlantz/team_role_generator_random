@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly Scorecard — PMBA Airlines</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="assets/supabase-config.js"></script>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-inner">
+    <span class="brand">PMBA Airlines</span>
+    <div class="nav-links">
+      <a href="index.html" class="nav-link">Role Draft</a>
+      <a href="scorecard.html" class="nav-link active">Weekly Scorecard</a>
+    </div>
+  </div>
+</nav>
+
+<div class="setup-banner" id="setup-banner">
+  This page isn't connected to a database yet — open <code>assets/supabase-config.js</code>
+  and paste in your Supabase project URL and anon key.
+</div>
+
+<header class="hero">
+  <p class="kicker">Weekly check-in</p>
+  <h1>How's the team doing this week?</h1>
+  <p class="sub">Modeled on the same weighted scorecard format as a performance-review metric, but tuned to your team contract's norms and goals. One check-in per person, per week &mdash; results are shown as a team average, never by name.</p>
+  <p class="status-line" id="top-status"></p>
+</header>
+
+<section class="scorecard-section">
+  <div class="wrap">
+    <h2>Your check-in</h2>
+    <div class="picker-row">
+      <label for="name-select" style="color: var(--text-dim); font-size: 0.92rem;">I'm filling this out for:</label>
+      <select id="name-select" class="name-select">
+        <option value="">Choose your name…</option>
+      </select>
+      <span style="color: var(--text-dim); font-size: 0.85rem;" id="week-label"></span>
+    </div>
+
+    <button class="rubric-toggle" id="rubric-toggle" type="button">What do 1, 3, and 5 mean?</button>
+    <div class="rubric-panel" id="rubric-panel"></div>
+
+    <div id="form-area" style="margin-top: 20px;"></div>
+  </div>
+</section>
+
+<section class="scorecard-section">
+  <div class="wrap">
+    <h2>This week's team pulse</h2>
+    <p class="note">Averaged across everyone who has checked in this week &mdash; anonymous, never broken out by name.</p>
+    <div id="pulse-area"></div>
+  </div>
+</section>
+
+<section class="scorecard-section" style="padding-bottom: 8px;">
+  <div class="wrap">
+    <h2>Trend by week</h2>
+    <p class="note">Overall team score, week over week.</p>
+    <div id="trend-area"></div>
+  </div>
+</section>
+
+<footer></footer>
+
+<script>
+(function () {
+  const MEMBERS = ["Delaney", "Alex", "Sam", "Nancy", "Laurent", "Daniel"];
+
+  const CATEGORIES = [
+    {
+      key: "preparedness",
+      label: "Preparedness & Attendance",
+      weight: 15,
+      rubric: {
+        1: "Missed meetings or class without a heads-up, or showed up unprepared.",
+        3: "Attended and prepared most of the time; occasional late notice.",
+        5: "Consistently on time and prepared; reviewed minutes and caught up proactively when absent."
+      }
+    },
+    {
+      key: "communication",
+      label: "Communication",
+      weight: 15,
+      rubric: {
+        1: "Went quiet when help was needed, or was hard to reach.",
+        3: "Responded and communicated adequately when asked.",
+        5: "Communicated proactively, especially when stuck or unavailable."
+      }
+    },
+    {
+      key: "contribution",
+      label: "Equal Contribution & Follow-Through",
+      weight: 20,
+      rubric: {
+        1: "Missed assigned work or left a fair share for others to cover.",
+        3: "Completed their assigned share, generally on time.",
+        5: "Reliably delivered a full, on-time share and pitched in beyond it when needed."
+      }
+    },
+    {
+      key: "safety",
+      label: "Collaboration & Psychological Safety",
+      weight: 15,
+      rubric: {
+        1: "Shut down others' ideas, or made it hard to admit mistakes or ask questions.",
+        3: "Respectful and open to others' input.",
+        5: "Actively made space for every voice and modeled \u2018it's safe to say I don't know.\u2019"
+      }
+    },
+    {
+      key: "coordination",
+      label: "Coordination & Meeting Deadlines",
+      weight: 15,
+      rubric: {
+        1: "Caused duplicated or missed work, or was repeatedly hard to schedule with.",
+        3: "Kept up with the team's plan and deadlines.",
+        5: "Actively helped the team stay coordinated and caught gaps before they became problems."
+      }
+    },
+    {
+      key: "role",
+      label: "This Week's Role Execution",
+      weight: 10,
+      rubric: {
+        1: "Didn't fulfill the responsibilities of their assigned role this week.",
+        3: "Handled their assigned role's core responsibilities.",
+        5: "Went above the basics of their assigned role this week."
+      }
+    },
+    {
+      key: "attitude",
+      label: "Attitude & Team Spirit (Discretionary)",
+      weight: 10,
+      rubric: {
+        1: "Negative or disengaged, even under normal pressure.",
+        3: "Maintained a steady, professional attitude.",
+        5: "Brought energy and encouragement that lifted the team."
+      }
+    }
+  ];
+  const TOTAL_WEIGHT = CATEGORIES.reduce((s, c) => s + c.weight, 0); // 100
+
+  function isoWeekKey(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = (d.getUTCDay() + 6) % 7;
+    d.setUTCDate(d.getUTCDate() - dayNum + 3);
+    const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+    const weekNum = 1 + Math.round(((d - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+    return d.getUTCFullYear() + "-W" + String(weekNum).padStart(2, "0");
+  }
+
+  function scoreToPct(scores) {
+    // Mirrors the raise-metric formula: weighted score per category = weight * (score/5).
+    let total = 0;
+    CATEGORIES.forEach(c => { total += c.weight * (scores[c.key] / 5); });
+    return total; // out of TOTAL_WEIGHT (100)
+  }
+
+  function pctBand(pct) {
+    if (pct >= 85) return { cls: "green", label: "Team is clicking" };
+    if (pct >= 70) return { cls: "amber", label: "Keep an eye on it" };
+    return { cls: "red", label: "Worth a team conversation" };
+  }
+
+  const configured = window.SUPABASE_URL && window.SUPABASE_ANON_KEY &&
+    !window.SUPABASE_URL.includes("PASTE_YOUR") && !window.SUPABASE_ANON_KEY.includes("PASTE_YOUR");
+
+  const setupBanner = document.getElementById("setup-banner");
+  const topStatus = document.getElementById("top-status");
+  const nameSelect = document.getElementById("name-select");
+  const weekLabel = document.getElementById("week-label");
+  const rubricToggle = document.getElementById("rubric-toggle");
+  const rubricPanel = document.getElementById("rubric-panel");
+  const formArea = document.getElementById("form-area");
+  const pulseArea = document.getElementById("pulse-area");
+  const trendArea = document.getElementById("trend-area");
+
+  MEMBERS.forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m; opt.textContent = m;
+    nameSelect.appendChild(opt);
+  });
+
+  rubricPanel.innerHTML = CATEGORIES.map(c =>
+    "<div><b>" + c.label + "</b> (weight " + c.weight + "%)<br>" +
+    "1 \u2014 " + c.rubric[1] + "<br>" +
+    "3 \u2014 " + c.rubric[3] + "<br>" +
+    "5 \u2014 " + c.rubric[5] + "</div>"
+  ).join("<br>");
+  rubricToggle.addEventListener("click", () => {
+    rubricPanel.classList.toggle("open");
+    rubricToggle.textContent = rubricPanel.classList.contains("open")
+      ? "Hide the 1 / 3 / 5 descriptions" : "What do 1, 3, and 5 mean?";
+  });
+
+  const weekKey = isoWeekKey(new Date());
+  weekLabel.textContent = "Week " + weekKey;
+
+  if (!configured) {
+    setupBanner.classList.add("show");
+    topStatus.textContent = "Not connected — see the banner above.";
+    topStatus.classList.add("error");
+    formArea.innerHTML = '<p class="list-empty">Connect the database to check in.</p>';
+    pulseArea.innerHTML = '<p class="list-empty">Connect the database to see results.</p>';
+    trendArea.innerHTML = '<p class="list-empty">Connect the database to see the trend.</p>';
+    return;
+  }
+
+  const sb = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  let allResponses = []; // every response, all weeks
+  let submittedThisWeek = new Set();
+
+  async function loadAll() {
+    const { data, error } = await sb.from("scorecard_responses")
+      .select("week_key, person, scores, weighted_total, created_at")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    allResponses = data || [];
+    submittedThisWeek = new Set(allResponses.filter(r => r.week_key === weekKey).map(r => r.person));
+  }
+
+  function renderPulse() {
+    const thisWeek = allResponses.filter(r => r.week_key === weekKey);
+    if (thisWeek.length === 0) {
+      pulseArea.innerHTML = '<p class="list-empty">No check-ins yet this week.</p>';
+      return;
+    }
+    const avgPct = thisWeek.reduce((s, r) => s + Number(r.weighted_total), 0) / thisWeek.length;
+    const band = pctBand(avgPct);
+
+    let html = '<div class="pulse-summary">';
+    html += '<span class="pulse-score">' + avgPct.toFixed(0) + '%</span>';
+    html += '<span class="pulse-chip ' + band.cls + '">' + band.label + '</span>';
+    html += '<div class="pulse-count">' + thisWeek.length + ' of ' + MEMBERS.length + ' teammates checked in this week</div>';
+    html += '</div>';
+
+    CATEGORIES.forEach(c => {
+      const avgScore = thisWeek.reduce((s, r) => s + Number(r.scores[c.key] || 0), 0) / thisWeek.length;
+      const pct = (avgScore / 5) * 100;
+      html += '<div class="bar-row"><span class="bar-label">' + c.label + '</span>' +
+        '<span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span>' +
+        '<span class="bar-value">' + avgScore.toFixed(1) + '</span></div>';
+    });
+    pulseArea.innerHTML = html;
+  }
+
+  function renderTrend() {
+    const byWeek = {};
+    allResponses.forEach(r => {
+      if (!byWeek[r.week_key]) byWeek[r.week_key] = [];
+      byWeek[r.week_key].push(Number(r.weighted_total));
+    });
+    const weeks = Object.keys(byWeek).sort().reverse();
+    if (weeks.length === 0) {
+      trendArea.innerHTML = '<p class="list-empty">No check-ins recorded yet.</p>';
+      return;
+    }
+    trendArea.innerHTML = weeks.map(w => {
+      const vals = byWeek[w];
+      const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+      const band = pctBand(avg);
+      return '<div class="trend-row"><span class="trend-week">' + w + '</span>' +
+        '<span class="trend-bar-track"><span class="trend-bar-fill ' + band.cls + '" style="width:' + avg + '%"></span></span>' +
+        '<span class="trend-value">' + avg.toFixed(0) + '%</span></div>';
+    }).join("");
+  }
+
+  function renderForm(selectedPerson) {
+    if (!selectedPerson) {
+      formArea.innerHTML = '<p class="list-empty">Choose your name above to check in.</p>';
+      return;
+    }
+    if (submittedThisWeek.has(selectedPerson)) {
+      formArea.innerHTML = '<div class="already-done"><b>' + selectedPerson + '</b> already checked in for Week ' + weekKey + '. See you next week.</div>';
+      return;
+    }
+
+    const selected = {};
+    formArea.innerHTML = "";
+    CATEGORIES.forEach(c => {
+      const row = document.createElement("div");
+      row.className = "category-row";
+      row.innerHTML =
+        '<div class="cat-head"><span class="cat-name">' + c.label + '</span><span class="cat-weight">weight ' + c.weight + '%</span></div>' +
+        '<div class="score-buttons">' +
+        [1, 3, 5].map(v => '<button type="button" class="score-btn" data-cat="' + c.key + '" data-val="' + v + '"><b>' + v + '</b>' + c.rubric[v] + '</button>').join("") +
+        '</div>';
+      formArea.appendChild(row);
+    });
+
+    formArea.querySelectorAll(".score-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const cat = btn.dataset.cat;
+        formArea.querySelectorAll('.score-btn[data-cat="' + cat + '"]').forEach(b => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selected[cat] = Number(btn.dataset.val);
+        updateSubmitState();
+      });
+    });
+
+    const submitRow = document.createElement("div");
+    submitRow.className = "submit-row";
+    const submitBtn = document.createElement("button");
+    submitBtn.className = "primary-btn";
+    submitBtn.textContent = "Submit check-in";
+    submitBtn.disabled = true;
+    submitRow.appendChild(submitBtn);
+    formArea.appendChild(submitRow);
+
+    function updateSubmitState() {
+      submitBtn.disabled = CATEGORIES.some(c => !(c.key in selected));
+    }
+
+    submitBtn.addEventListener("click", async () => {
+      submitBtn.disabled = true;
+      topStatus.classList.remove("error");
+      topStatus.textContent = "Saving…";
+      const weighted_total = scoreToPct(selected);
+      try {
+        const { error } = await sb.from("scorecard_responses").insert({
+          week_key: weekKey, person: selectedPerson, scores: selected, weighted_total
+        });
+        if (error) {
+          if (error.code === "23505") {
+            topStatus.textContent = selectedPerson + " already checked in for this week.";
+          } else {
+            throw error;
+          }
+        } else {
+          allResponses.unshift({ week_key: weekKey, person: selectedPerson, scores: selected, weighted_total, created_at: new Date().toISOString() });
+          submittedThisWeek.add(selectedPerson);
+          topStatus.textContent = "Check-in saved. Thanks, " + selectedPerson + ".";
+          renderForm(selectedPerson);
+          renderPulse();
+          renderTrend();
+        }
+      } catch (err) {
+        console.error(err);
+        topStatus.textContent = "Couldn't save — check your connection and try again.";
+        topStatus.classList.add("error");
+        submitBtn.disabled = false;
+      }
+    });
+  }
+
+  nameSelect.addEventListener("change", () => renderForm(nameSelect.value));
+
+  (async function init() {
+    try {
+      await loadAll();
+      renderForm("");
+      renderPulse();
+      renderTrend();
+    } catch (err) {
+      console.error(err);
+      topStatus.textContent = "Couldn't load shared data — check your Supabase setup.";
+      topStatus.classList.add("error");
+    }
+  })();
+})();
+</script>
+
+</body>
+</html>
