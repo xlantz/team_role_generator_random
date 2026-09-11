@@ -33,10 +33,13 @@ Each 6-draw cycle is a randomized Latin square: every member gets each of the si
 
 ## How the scorecard works
 
-- One check-in per person, per (ISO) week — enforced both in the UI and at the database level, so two people submitting at once can't create duplicates.
+- The check-in "week" resets every **Tuesday at 10:00 PM Mountain Time** — hard-coded to that timezone, so it's the same real-world moment for everyone regardless of their device's clock or location. It isn't tied to the calendar week.
+- **If someone doesn't submit before the reset, that week is simply skipped for them** — they're excluded from that week's average, not given a default/average score. This is the standard approach for pulse-style check-ins: a missing response usually isn't random (the people who skip are often the ones something's up with), so imputing an average would mask the exact signal the check-in exists to catch. The pulse always shows "X of 6 checked in" so low participation is visible rather than papered over.
+- One check-in per person, per cycle — enforced both in the UI and at the database level, so two people submitting at once can't create duplicates.
 - Categories, weights, and the 1/3/5 rubric live in the `CATEGORIES` array near the top of `scorecard.html`'s script — edit that array to change what's being measured. Old responses stay valid even if categories change later; they just won't have data for categories that didn't exist yet.
 - The weighted score formula matches the team's raise-metric spreadsheet: `weighted % = Σ(weight × score ÷ 5)`, with the same color bands (≥85% green, 70–84% amber, <70% red).
 - Results are always shown aggregated across whoever has checked in that week — never broken out by name.
+- **One-time transition note:** responses submitted before this change used ISO-calendar-week labels (e.g. `2026-W37`). Those rows are untouched and still display correctly, just with their old label style, until enough new-format weeks (`2026-09-08`, etc.) accumulate around them on the trend chart.
 
 ## A note on access
 
