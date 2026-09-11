@@ -81,6 +81,7 @@
 (function () {
   const MEMBERS = ["Delaney", "Alex", "Sam", "Nancy", "Laurent", "Daniel"];
   const ROLES = ["Team Leader", "Facilitator", "Scribe", "Resource Investigator", "Evaluator", "Innovator"];
+  const RESET_PIN = "082422";
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const configured = window.SUPABASE_URL && window.SUPABASE_ANON_KEY &&
@@ -327,9 +328,14 @@
   document.getElementById("reset-btn").addEventListener("click", async () => {
     const typed = prompt(
       "This wipes the shared draw history and counts for the WHOLE team, for everyone with this link.\n\n" +
-      'Type RESET (all caps) to confirm:'
+      "Enter the reset PIN to confirm:"
     );
-    if (typed !== "RESET") return;
+    if (typed === null) return;
+    if (typed.trim() !== RESET_PIN) {
+      statusLine.textContent = "Wrong PIN — nothing was reset.";
+      statusLine.classList.add("error");
+      return;
+    }
 
     statusLine.classList.remove("error");
     statusLine.textContent = "Resetting…";
