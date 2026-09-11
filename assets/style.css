@@ -296,3 +296,44 @@ select.name-select:focus-visible { outline: 2px solid var(--teal); }
 .trend-bar-fill.amber { background: var(--amber); }
 .trend-bar-fill.red { background: var(--red); }
 .trend-value { width: 46px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 480px) {
+  .bar-row { flex-wrap: wrap; }
+  .bar-label { width: 100%; }
+}
+
+/* ---------- Contract page ---------- */
+section.doc-section { padding: 40px 24px 0; }
+.doc-meta { color: var(--text-dim); font-size: 0.85rem; margin: -8px 0 0; }
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 24px 26px;
+  margin-bottom: 20px;
+}
+.panel h3 {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+  margin: 0 0 6px;
+  color: var(--gold);
+}
+.panel h4 {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin: 16px 0 4px;
+  color: var(--text);
+}
+.panel p, .panel li { color: var(--text-dim); font-size: 0.95rem; line-height: 1.6; }
+.panel p { margin: 0 0 12px; }
+.panel ul { margin: 0 0 12px; padding-left: 20px; }
+.panel a { text-decoration: underline; }
+.panel-sub { color: var(--text-dim); font-size: 0.85rem; margin: -4px 0 16px; }
+.penalty-list { list-style: none; padding-left: 0; margin: 8px 0 0; }
+.penalty-list li {
+  padding: 8px 0 8px 14px;
+  border-left: 2px solid var(--mischief);
+  margin-bottom: 6px;
+}
