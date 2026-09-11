@@ -254,18 +254,71 @@
     pulseArea.innerHTML = html;
   }
 
+  function renderTrendChart(weeksAsc, byWeek) {
+    const width = 640, height = 220, padL = 38, padR = 16, padT = 20, padB = 30;
+    const plotW = width - padL - padR, plotH = height - padT - padB;
+    const n = weeksAsc.length;
+    const xFor = i => padL + (n > 1 ? (plotW / (n - 1)) * i : plotW / 2);
+    const yFor = pct => padT + plotH * (1 - pct / 100);
+
+    const gridVals = [0, 25, 50, 70, 85, 100];
+    const grid = gridVals.map(v => {
+      const y = yFor(v).toFixed(1);
+      const dashed = (v === 70 || v === 85) ? ' stroke-dasharray="4 3"' : '';
+      return '<line x1="' + padL + '" y1="' + y + '" x2="' + (width - padR) + '" y2="' + y + '" stroke="var(--hairline)" stroke-width="1"' + dashed + ' />' +
+        '<text x="' + (padL - 8) + '" y="' + (Number(y) + 3) + '" text-anchor="end" font-size="10" fill="var(--text-dim)" font-family="Inter, sans-serif">' + v + '%</text>';
+    }).join("");
+
+    const points = weeksAsc.map((w, i) => {
+      const vals = byWeek[w];
+      const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+      return { x: xFor(i), y: yFor(avg), avg, week: w };
+    });
+
+    const linePath = points.map((p, i) => (i === 0 ? "M" : "L") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
+
+    const bandColor = cls => cls === "green" ? "var(--green)" : cls === "amber" ? "var(--amber)" : "var(--red)";
+    const dots = points.map(p => {
+      const band = pctBand(p.avg);
+      const color = bandColor(band.cls);
+      return '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="5" fill="' + color + '" stroke="var(--panel)" stroke-width="2">' +
+        '<title>' + p.week + ': ' + p.avg.toFixed(0) + '% (' + band.label + ')</title></circle>' +
+        '<text x="' + p.x.toFixed(1) + '" y="' + (p.y - 12).toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="var(--text)" font-family="Fraunces, serif">' + p.avg.toFixed(0) + '%</text>';
+    }).join("");
+
+    const xLabels = points.map(p =>
+      '<text x="' + p.x.toFixed(1) + '" y="' + (height - 10) + '" text-anchor="middle" font-size="10" fill="var(--text-dim)" font-family="Inter, sans-serif">' + p.week.replace("2026-", "") + '</text>'
+    ).join("");
+
+    return '<svg viewBox="0 0 ' + width + ' ' + height + '" class="trend-chart" role="img" aria-label="Weekly team health trend">' +
+      grid + '<path d="' + linePath + '" fill="none" stroke="var(--teal)" stroke-width="2.5" />' + dots + xLabels + '</svg>';
+  }
+
   function renderTrend() {
     const byWeek = {};
     allResponses.forEach(r => {
       if (!byWeek[r.week_key]) byWeek[r.week_key] = [];
       byWeek[r.week_key].push(Number(r.weighted_total));
     });
-    const weeks = Object.keys(byWeek).sort().reverse();
+    const weeks = Object.keys(byWeek).sort().reverse(); // newest first, for the detail list
     if (weeks.length === 0) {
       trendArea.innerHTML = '<p class="list-empty">No check-ins recorded yet.</p>';
       return;
     }
-    trendArea.innerHTML = weeks.map(w => {
+
+    let html = "";
+    if (weeks.length > 1) {
+      const weeksAsc = weeks.slice().reverse(); // oldest first, for the chart's left-to-right reading
+      html += '<div class="trend-chart-wrap">' + renderTrendChart(weeksAsc, byWeek) +
+        '<div class="trend-legend">' +
+        '<span><span class="dot" style="background:var(--green)"></span>85%+ on track</span>' +
+        '<span><span class="dot" style="background:var(--amber)"></span>70\u201384% keep an eye on it</span>' +
+        '<span><span class="dot" style="background:var(--red)"></span>under 70% needs a conversation</span>' +
+        '</div></div>';
+    }
+
+    html += '<p class="trend-detail-label">Week-by-week detail</p>';
+    html += weeks.map(w => {
       const vals = byWeek[w];
       const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
       const band = pctBand(avg);
@@ -273,6 +326,8 @@
         '<span class="trend-bar-track"><span class="trend-bar-fill ' + band.cls + '" style="width:' + avg + '%"></span></span>' +
         '<span class="trend-value">' + avg.toFixed(0) + '%</span></div>';
     }).join("");
+
+    trendArea.innerHTML = html;
   }
 
   function renderForm(selectedPerson) {

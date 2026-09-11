@@ -297,6 +297,18 @@ select.name-select:focus-visible { outline: 2px solid var(--teal); }
 .trend-bar-fill.red { background: var(--red); }
 .trend-value { width: 46px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
 
+.trend-chart-wrap {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 18px 18px 8px;
+  margin-bottom: 20px;
+}
+.trend-chart { width: 100%; height: auto; display: block; }
+.trend-legend { display: flex; gap: 18px; font-size: 0.78rem; color: var(--text-dim); margin: 6px 2px 2px; flex-wrap: wrap; }
+.trend-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+.trend-detail-label { font-size: 0.82rem; color: var(--text-dim); margin: 0 0 6px; }
+
 @media (max-width: 480px) {
   .bar-row { flex-wrap: wrap; }
   .bar-label { width: 100%; }
