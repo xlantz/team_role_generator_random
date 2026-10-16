@@ -133,9 +133,11 @@ button.primary-btn:disabled { opacity: 0.6; cursor: default; transform: none; }
 
 /* ---------- Role cards ---------- */
 section.cards { padding: 44px 24px 8px; }
-.card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-@media (max-width: 720px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 460px) { .card-grid { grid-template-columns: 1fr; } }
+/* Flex (not grid) so an odd number of cards centers its last row instead of leaving a gap. */
+.card-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; }
+.card-grid .role-card { flex: 0 1 calc((100% - 32px) / 3); }
+@media (max-width: 720px) { .card-grid .role-card { flex-basis: calc((100% - 16px) / 2); } }
+@media (max-width: 460px) { .card-grid .role-card { flex-basis: 100%; } }
 
 .role-card {
   background: var(--panel);

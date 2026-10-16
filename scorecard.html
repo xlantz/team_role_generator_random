@@ -74,7 +74,7 @@
 
 <script>
 (function () {
-  const MEMBERS = ["Delaney", "Alex", "Sam", "Nancy", "Laurent", "Daniel"];
+  const MEMBERS = ["Delaney", "Alex", "Nancy", "Laurent", "Daniel"];
 
   const CATEGORIES = [
     {
@@ -272,7 +272,12 @@
     let html = '<div class="pulse-summary">';
     html += '<span class="pulse-score">' + avgPct.toFixed(0) + '%</span>';
     html += '<span class="pulse-chip ' + band.cls + '">' + band.label + '</span>';
-    html += '<div class="pulse-count">' + thisWeek.length + ' of ' + MEMBERS.length + ' teammates checked in this week</div>';
+    // Responses saved by someone no longer on the team still count toward the averages (history is
+    // never rewritten), but the "X of N" count only reflects the current team.
+    const currentCount = thisWeek.filter(r => MEMBERS.includes(r.person)).length;
+    const formerCount = thisWeek.length - currentCount;
+    html += '<div class="pulse-count">' + currentCount + ' of ' + MEMBERS.length + ' teammates checked in this week' +
+      (formerCount > 0 ? ' (averages also include ' + formerCount + ' from a former teammate)' : '') + '</div>';
     html += '</div>';
 
     CATEGORIES.forEach(c => {

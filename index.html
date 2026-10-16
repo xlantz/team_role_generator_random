@@ -32,7 +32,7 @@
 <header class="hero">
   <p class="kicker">Team role draft</p>
   <h1>Who's running the show this week?</h1>
-  <p class="sub">Draw the six team roles plus the deviant. Every draw keeps things fair &mdash; no one repeats a role until the whole team has had a turn. Everyone who opens this page sees the same current assignment.</p>
+  <p class="sub">Draw the five team roles plus the deviant. Every draw keeps things fair &mdash; no one repeats a role until the whole team has had a turn. Everyone who opens this page sees the same current assignment.</p>
   <p class="members-line">Team: <span id="members-list"></span></p>
   <button id="draw-btn" class="primary-btn" disabled>Draw roles</button>
   <p class="round-tag">Draws so far: <b id="round-count">0</b></p>
@@ -80,8 +80,12 @@
 
 <script>
 (function () {
-  const MEMBERS = ["Delaney", "Alex", "Sam", "Nancy", "Laurent", "Daniel"];
-  const ROLES = ["Team Leader", "Facilitator", "Scribe", "Resource Investigator", "Evaluator", "Innovator"];
+  const MEMBERS = ["Delaney", "Alex", "Nancy", "Laurent", "Daniel"];
+  const ROLES = ["Team Leader", "Facilitator", "Scribe", "Resource Investigator", "Evaluator"];
+  const N = MEMBERS.length; // members and roles stay equal in number so every cycle is a clean rotation
+  // Older draws in the database may include roles/people that have since been removed
+  // (Sam, Innovator). They stay in the draw history as a record but no longer count anywhere else.
+  const LEGACY_ROLE_ORDER = ROLES.concat(["Innovator"]);
   const RESET_PIN = "082422";
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -125,7 +129,36 @@
   }
 
   function freshCycle() {
-    return { members: shuffle(MEMBERS), roles: shuffle(ROLES), shiftOrder: shuffle([0, 1, 2, 3, 4, 5]), idx: 0 };
+    return {
+      members: shuffle(MEMBERS),
+      roles: shuffle(ROLES),
+      shiftOrder: shuffle(Array.from({ length: N }, (_, i) => i)),
+      idx: 0
+    };
+  }
+
+  function sameSet(a, b) {
+    return Array.isArray(a) && a.length === b.length && b.every(x => a.includes(x));
+  }
+
+  // The saved cycle/queue in the database may still describe the old six-person team.
+  // If so, start a fresh cycle for the current team and drop removed people from the deviant queue.
+  function normalizeState() {
+    const c = cycleState;
+    const cycleOk = c && sameSet(c.members, MEMBERS) && sameSet(c.roles, ROLES) &&
+      Array.isArray(c.shiftOrder) && c.shiftOrder.length === N && Number.isInteger(c.idx);
+    if (!cycleOk) cycleState = freshCycle();
+    deviantQueue = (Array.isArray(deviantQueue) ? deviantQueue : []).filter(m => MEMBERS.includes(m));
+  }
+
+  // A draw only counts as "current" if it covers exactly today's team and today's roles.
+  function isCurrentDraw(entry) {
+    if (!entry || !entry.assignments) return false;
+    const people = Object.keys(entry.assignments);
+    return people.length === N &&
+      people.every(p => MEMBERS.includes(p)) &&
+      ROLES.every(r => people.some(p => entry.assignments[p] === r)) &&
+      MEMBERS.includes(entry.deviant);
   }
 
   function computeCounts() {
@@ -136,8 +169,11 @@
       c[m]["Deviant"] = 0;
     });
     history.forEach(entry => {
-      MEMBERS.forEach(m => { c[m][entry.assignments[m]] += 1; });
-      c[entry.deviant]["Deviant"] += 1;
+      MEMBERS.forEach(m => {
+        const role = entry.assignments && entry.assignments[m];
+        if (ROLES.includes(role)) c[m][role] += 1;
+      });
+      if (MEMBERS.includes(entry.deviant)) c[entry.deviant]["Deviant"] += 1;
     });
     return c;
   }
@@ -152,6 +188,7 @@
     cycleState = stateRow.state.cycle;
     deviantQueue = stateRow.state.deviantQueue;
     history = historyRows || [];
+    normalizeState();
   }
 
   async function saveState() {
@@ -178,7 +215,7 @@
   }
 
   function renderCardsStatic() {
-    const latest = history[0];
+    const latest = isCurrentDraw(history[0]) ? history[0] : null;
     document.querySelectorAll(".role-card").forEach(card => {
       const role = card.dataset.role;
       const slot = card.querySelector(".name-slot");
@@ -224,11 +261,14 @@
       historyList.innerHTML = '<p class="history-empty">No draws yet.</p>';
       return;
     }
+    const roleRank = r => { const i = LEGACY_ROLE_ORDER.indexOf(r); return i === -1 ? 99 : i; };
     historyList.innerHTML = history.map(entry => {
-      const parts = ROLES.map(r => {
-        const person = Object.keys(entry.assignments).find(m => entry.assignments[m] === r);
-        return person + " \u2013 " + r;
-      }).join(", ");
+      // Built from the saved assignments themselves, so older draws still show
+      // everyone who was on the team at the time (including removed people/roles).
+      const parts = Object.keys(entry.assignments)
+        .sort((a, b) => roleRank(entry.assignments[a]) - roleRank(entry.assignments[b]))
+        .map(person => person + " \u2013 " + entry.assignments[person])
+        .join(", ");
       return '<div class="history-item"><span class="h-round">Draw ' + entry.round + '</span>: ' +
         parts + '. <span class="h-dev">Deviant: ' + entry.deviant + '</span></div>';
     }).join("");
@@ -258,12 +298,12 @@
     statusLine.textContent = "";
 
     try {
-      if (cycleState.idx >= 6) cycleState = freshCycle();
+      if (cycleState.idx >= N) cycleState = freshCycle();
       const shift = cycleState.shiftOrder[cycleState.idx];
       const assignments = {};
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < N; i++) {
         const person = cycleState.members[i];
-        const role = cycleState.roles[(i + shift) % 6];
+        const role = cycleState.roles[(i + shift) % N];
         assignments[person] = role;
       }
       cycleState.idx += 1;
@@ -361,7 +401,9 @@
     try {
       await loadAll();
       renderAll();
-      statusLine.textContent = "";
+      statusLine.textContent = (history.length > 0 && !isCurrentDraw(history[0]))
+        ? "The team changed (Sam and the Innovator role were removed), so the last draw no longer applies. Draw to assign roles for the current team."
+        : "";
       drawBtn.disabled = false;
     } catch (err) {
       console.error(err);
